@@ -152,7 +152,7 @@ public final class Promise<Value> {
         queue.async(execute: {
             do {
                 try work(self.fulfill, self.reject)
-            } catch let error {
+            } catch {
                 self.reject(error)
             }
         })
@@ -167,7 +167,7 @@ public final class Promise<Value> {
                 onFulfilled: { value in
                     do {
                         try onFulfilled(value).then(on: queue, fulfill, reject)
-                    } catch let error {
+                    } catch {
                         reject(error)
                     }
                 },
@@ -182,14 +182,31 @@ public final class Promise<Value> {
         return then(on: queue, { (value) -> Promise<NewValue> in
             do {
                 return Promise<NewValue>(value: try onFulfilled(value))
-            } catch let error {
+            } catch {
                 return Promise<NewValue>(error: error)
             }
         })
     }
     
     @discardableResult
-    public func then(on queue: ExecutionContext = DispatchQueue.main, _ onFulfilled: @escaping (Value) -> Void, _ onRejected: @escaping (Error) -> Void = { _ in }) -> Promise<Value> {
+    public func then(on queue: ExecutionContext = DispatchQueue.main, _ onFulfilled: @escaping (Value) throws -> Void) -> Promise<Value> {
+        return Promise(work: { (fulfill, reject) in
+            self.addCallbacks(
+                on: queue,
+                onFulfilled: { (value) in
+                    do {
+                        try onFulfilled(value)
+                        fulfill(value)
+                    } catch {
+                        reject(error)
+                    }
+                }, onRejected: reject
+            )
+        })
+    }
+    
+    @discardableResult
+    func then(on queue: ExecutionContext = DispatchQueue.main, _ onFulfilled: @escaping (Value) -> Void, _ onRejected: @escaping (Error) -> Void) -> Promise<Value> {
         addCallbacks(on: queue, onFulfilled: onFulfilled, onRejected: onRejected)
         return self
     }
